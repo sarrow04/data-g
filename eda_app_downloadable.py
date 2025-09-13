@@ -83,26 +83,41 @@ if st.session_state.df is not None:
     for col_name in df.columns:
         st.subheader(f"【 {col_name} 】列の分析結果", divider='blue')
         
-        col1, col2 = st.columns([1, 2]) # 1:2の比率でカラムを分割
+        col1, col2 = st.columns([1, 2])
 
         # --- 数値データの場合 ---
         if pd.api.types.is_numeric_dtype(df[col_name]):
             with col1:
                 st.write("**統計量**")
                 stats_df = df[col_name].describe()
-                stats_df['variance'] = df[col_name].var() # 分散を追加
+                stats_df['variance'] = df[col_name].var()
                 st.dataframe(stats_df)
 
             with col2:
-                st.write("**分布（ヒストグラムと箱ひげ図）**")
-                fig_dist, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
-                sns.histplot(df[col_name], kde=True, ax=ax1)
-                ax1.set_title('ヒストグラム')
-                sns.boxplot(x=df[col_name], ax=ax2)
-                ax2.set_title('箱ひげ図')
-                plt.tight_layout()
-                st.pyplot(fig_dist)
-                create_download_button(fig_dist, f"distribution_{col_name}.png")
+                # ▼▼▼ 変更点: 欠損値のみの列の場合、エラーを回避 ▼▼▼
+                if df[col_name].dropna().empty:
+                    st.write("**分布**")
+                    st.info("この列は欠損値のみのため、グラフを描画できません。")
+                else:
+                    st.write("**分布（箱ひげ図とヒストグラム）**")
+                    # ▼▼▼ 変更点: 箱ひげ図とヒストグラムを結合して表示 ▼▼▼
+                    fig_dist, (ax_box, ax_hist) = plt.subplots(
+                        2, 1, sharex=True, figsize=(8, 6),
+                        gridspec_kw={"height_ratios": (.15, .85)}
+                    )
+                    # 上段に箱ひげ図
+                    sns.boxplot(x=df[col_name], ax=ax_box)
+                    ax_box.set_title(f'「{col_name}」の箱ひげ図とヒストグラム')
+                    ax_box.set(xlabel='') # 上のグラフのx軸ラベルを消す
+                    
+                    # 下段にヒストグラム
+                    sns.histplot(df[col_name], kde=True, ax=ax_hist)
+                    ax_hist.set(xlabel='値') # x軸ラベルを共通で設定
+                    
+                    plt.subplots_adjust(hspace=0) # グラフ間の余白をなくす
+                    st.pyplot(fig_dist)
+                    create_download_button(fig_dist, f"distribution_{col_name}.png")
+                    # ▲▲▲ 変更ここまで ▲▲▲
 
         # --- カテゴリデータ（文字列など）の場合 ---
         else:
@@ -138,7 +153,7 @@ if st.session_state.df is not None:
     if not datetime_cols:
         st.info("データ内に日付・時刻形式の列が見つかりませんでした。")
     else:
-        time_col = datetime_cols[0] # 最初の時系列データをX軸として使用
+        time_col = datetime_cols[0]
         st.success(f"時系列データ列 **`{time_col}`** を検知しました。これをX軸として、全ての数値列の折れ線グラフを自動生成します。")
         
         for num_col in numeric_cols:
